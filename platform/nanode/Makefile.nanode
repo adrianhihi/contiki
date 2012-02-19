@@ -19,7 +19,7 @@ USART_PORT    = 0
 
 AVRDUDE_PROGRAMMER  = arduino
 AVRDUDE_PORT       ?= /dev/tty.usbserial-A700fbtR
-AVRDUDE_OPTIONS     = -V -F -b 57600
+AVRDUDE_OPTIONS     = -b 57600 -D
 
 CONTIKI_PLAT_DEFS = \
   -DF_CPU=$(AVR_MCU_SPEED) \
