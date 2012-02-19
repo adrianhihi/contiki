@@ -1,0 +1,35 @@
+CONTIKI_TARGET_DIRS	= . apps loader
+CONTIKI_CORE = contiki-nanode-main
+CONTIKI_TARGET_MAIN = ${CONTIKI_CORE}.o
+
+CONTIKI_TARGET_SOURCEFILES += rs232.c cfs-eeprom.c eeprom.c random.c \
+                mmem.c contiki-nanode-main.c
+
+CONTIKIAVR = $(CONTIKI)/cpu/avr
+CONTIKIBOARD = .
+
+ifndef $(USART_BAUD)
+USART_BAUD = 38400
+endif
+
+AVR_MCU_CLOCK = 16
+AVR_MCU_SPEED = 16000000UL
+MCU           = atmega328p
+USART_PORT    = 0
+
+AVRDUDE_PROGRAMMER  = arduino
+AVRDUDE_PORT       ?= /dev/tty.usbserial-A700fbtR
+AVRDUDE_OPTIONS     = -V -F -b 57600
+
+CONTIKI_PLAT_DEFS = \
+  -DF_CPU=$(AVR_MCU_SPEED) \
+  -D__PROG_TYPES_COMPAT__ \
+  -DMCU_MHZ=$(AVR_MCU_CLOCK) \
+  -DAUTO_CRC_PADDING=2 \
+  -DUSART_BAUD=USART_BAUD_$(USART_BAUD) \
+  -DUSART_PORT=RS232_PORT_$(USART_PORT)
+
+
+upload: $(CONTIKI_PROJECT).$(TARGET).u
+
+include $(CONTIKIAVR)/Makefile.avr
