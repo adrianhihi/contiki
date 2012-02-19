@@ -67,13 +67,13 @@ init_lowlevel(void)
 int
 main(void)
 {
-  //calibrate_rc_osc_32k(); //CO: Had to comment this out
-
   /* Initialize hardware */
   init_lowlevel();
 
   /* Clock */
   clock_init();
+
+  printf_P(PSTR("\n*******Booting %s*******\n"),CONTIKI_VERSION_STRING);
 
   /* Process subsystem */
   process_init();
@@ -81,18 +81,13 @@ main(void)
   /* Register initial processes */
   procinit_init();
 
-  //Give ourselves a prefix
-  //init_net();
-
-  /* This line wasn't present in ProMini code */
+  /* Initialise the serial driver */
   serial_line_init();
-
-  printf_P(PSTR("\r\n********BOOTING CONTIKI*********\r\n"));
 
   /* Autostart processes */
   autostart_start(autostart_processes);
 
-  printf_P(PSTR("System online.\r\n"));
+  printf_P(PSTR("System online.\n"));
 
   /* Main scheduler loop */
   do {
