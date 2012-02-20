@@ -42,11 +42,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
    addresses and so can all be connected to the same pin.  Don't hold
    your breath though! */
 
-// class NanodeUNIO {
-//  private:
-//   uint8_t addr;
-//  public:
-//   NanodeUNIO(uint8_t address);
 void unio_init(uint8_t address);
 
 /* All the following calls return true for success and false for
