@@ -47,11 +47,28 @@
 
 #include "dev/rs232.h"
 #include "dev/serial-line.h"
+#include "dev/unio.h"
 
 #include "platform-conf.h"
 
 
 PROCINIT(&etimer_process, &serial_line_process);
+
+
+void read_mac_address() {
+  uint8_t macaddr[6];
+  uint8_t res;
+
+  unio_init(NANODE_MAC_DEVICE);
+
+  printf_P(PSTR("Reading MAC address... "));
+  res=unio_read(macaddr, NANODE_MAC_ADDRESS, 6);
+  if (res) printf_P(PSTR("success\n"));
+  else printf_P(PSTR("failure\n"));
+  printf_P(PSTR("MAC address is: %02X:%02X:%02X:%02X:%02X:%02X\n"),
+          macaddr[0],macaddr[1],macaddr[2],
+          macaddr[3],macaddr[4],macaddr[5]);
+}
 
 void
 init_lowlevel(void)
@@ -74,6 +91,8 @@ main(void)
   clock_init();
 
   printf_P(PSTR("\n*******Booting %s*******\n"),CONTIKI_VERSION_STRING);
+
+  read_mac_address();
 
   /* Process subsystem */
   process_init();

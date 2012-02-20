@@ -19,7 +19,12 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 
-#include "NanodeUNIO.h"
+#include "unio.h"
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+
 
 #define UNIO_STARTHEADER 0x55
 #define UNIO_READ        0x03
@@ -46,11 +51,11 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 #define UNIO_OUTPUT() do { DDRD |= 0x80; } while (0)
 #define UNIO_INPUT() do { DDRD &= 0x7f; } while (0)
 
-static void set_bus(boolean state) {
+static void set_bus(uint8_t state) {
   PORTD=(PORTD&0x7f)|(!!state)<<7;
 }
 
-static boolean read_bus(void) {
+static uint8_t read_bus(void) {
   return !!(PIND&0x80);
 }
 
@@ -59,7 +64,7 @@ static boolean read_bus(void) {
    between the end of one command and the start of the next. */
 static void unio_inter_command_gap(void) {
   set_bus(1);
-  delayMicroseconds(UNIO_TSS+UNIO_FUDGE_FACTOR);
+  _delay_us(UNIO_TSS+UNIO_FUDGE_FACTOR);
 }
 
 /* Send a standby pulse on the bus.  After power-on or brown-out
@@ -69,9 +74,9 @@ static void unio_inter_command_gap(void) {
 static void unio_standby_pulse(void) {
   set_bus(0);
   UNIO_OUTPUT();
-  delayMicroseconds(UNIO_TSS+UNIO_FUDGE_FACTOR);
+  _delay_us(UNIO_TSS+UNIO_FUDGE_FACTOR);
   set_bus(1);
-  delayMicroseconds(UNIO_TSTBY+UNIO_FUDGE_FACTOR);
+  _delay_us(UNIO_TSTBY+UNIO_FUDGE_FACTOR);
 }
 
 /* While bit-banging, all delays are expressed in terms of quarter
@@ -80,29 +85,30 @@ static void unio_standby_pulse(void) {
    each bit time.  During a read we perform a dummy write at the start
    and 1/2 way through each bit time. */
 
-static volatile boolean rwbit(boolean w) {
-  boolean a,b;
+static volatile uint8_t rwbit(uint8_t w) {
+  uint8_t a, b;
   set_bus(!w);
-  delayMicroseconds(UNIO_QUARTER_BIT);
+  _delay_us(UNIO_QUARTER_BIT);
   a=read_bus();
-  delayMicroseconds(UNIO_QUARTER_BIT);
+  _delay_us(UNIO_QUARTER_BIT);
   set_bus(w);
-  delayMicroseconds(UNIO_QUARTER_BIT);
+  _delay_us(UNIO_QUARTER_BIT);
   b=read_bus();
-  delayMicroseconds(UNIO_QUARTER_BIT);
+  _delay_us(UNIO_QUARTER_BIT);
   return b&&!a;
 }
 
-static boolean read_bit(void) {
-  boolean b;
+static uint8_t read_bit(void) {
+  uint8_t b;
   UNIO_INPUT();
   b=rwbit(1);
   UNIO_OUTPUT();
   return b;
 }
 
-static boolean send_byte(byte b, boolean mak) {
-  for (int i=0; i<8; i++) {
+static uint8_t send_byte(uint8_t b, uint8_t mak) {
+  uint8_t i;
+  for (i=0; i<8; i++) {
     rwbit(b&0x80);
     b<<=1;
   }
@@ -110,10 +116,10 @@ static boolean send_byte(byte b, boolean mak) {
   return read_bit();
 }
 
-static boolean read_byte(byte *b, boolean mak) {
-  byte data=0;
+static uint8_t read_byte(uint8_t *b, uint8_t mak) {
+  uint8_t i, data=0;
   UNIO_INPUT();
-  for (int i=0; i<8; i++) {
+  for (i=0; i<8; i++) {
     data = (data << 1) | rwbit(1);
   }
   UNIO_OUTPUT();
@@ -123,23 +129,25 @@ static boolean read_byte(byte *b, boolean mak) {
 }
 
 /* Send data on the bus. If end is true, send NoMAK after the last
-   byte; otherwise send MAK. */
-static boolean unio_send(const byte *data,word length,boolean end) {
-  for (word i=0; i<length; i++) {
-    /* Rules for sending MAK: if it's the last byte and end is true,
+   uint8_t; otherwise send MAK. */
+static uint8_t send_data(const uint8_t *data, uint16_t length, uint8_t end) {
+  uint16_t i;
+  for (i=0; i<length; i++) {
+    /* Rules for sending MAK: if it's the last uint8_t and end is true,
        send NoMAK.  Otherwise send MAK. */
-    if (!send_byte(data[i],!(((i+1)==length) && end))) return false;
+    if (!send_byte(data[i],!(((i+1)==length) && end))) return 0;
   }
-  return true;
+  return 1;
 }
 
 /* Read data from the bus.  After reading 'length' bytes, send NoMAK to
    terminate the command. */
-static boolean unio_read(byte *data,word length)  {
-  for (word i=0; i<length; i++) {
-    if (!read_byte(data+i,!((i+1)==length))) return false;
+static uint8_t read_data(uint8_t *data, uint16_t length)  {
+  uint16_t i;
+  for (i=0; i<length; i++) {
+    if (!read_byte(data+i,!((i+1)==length))) return 0;
   }
-  return true;
+  return 1;
 }
 
 /* Send a start header on the bus.  Hold the bus low for UNIO_THDR,
@@ -149,108 +157,113 @@ static boolean unio_read(byte *data,word length)  {
    connected then that could cause bus contention. */
 static void unio_start_header(void) {
   set_bus(0);
-  delayMicroseconds(UNIO_THDR+UNIO_FUDGE_FACTOR);
-  send_byte(UNIO_STARTHEADER,true);
+  _delay_us(UNIO_THDR+UNIO_FUDGE_FACTOR);
+  send_byte(UNIO_STARTHEADER, 1);
 }
 
-NanodeUNIO::NanodeUNIO(byte address) {
-  addr=address;
+
+static uint8_t unio_address;
+
+void unio_init(uint8_t address)
+{
+  unio_address = address;
 }
 
-#define fail() do { sei(); return false; } while (0)
 
-boolean NanodeUNIO::read(byte *buffer,word address,word length) {
-  byte cmd[4];
-  cmd[0]=addr;
+#define fail() do { sei(); return 0; } while (0)
+
+uint8_t unio_read(uint8_t *buffer, uint16_t address, uint16_t length) {
+  uint8_t cmd[4];
+  cmd[0]=unio_address;
   cmd[1]=UNIO_READ;
-  cmd[2]=(byte)(address>>8);
-  cmd[3]=(byte)(address&0xff);
+  cmd[2]=(uint8_t)(address>>8);
+  cmd[3]=(uint8_t)(address&0xff);
   unio_standby_pulse();
   cli();
   unio_start_header();
-  if (!unio_send(cmd,4,false)) fail();
-  if (!unio_read(buffer,length)) fail();
+  if (!send_data(cmd, 4, 0)) fail();
+  if (!read_data(buffer, length)) fail();
   sei();
-  return true;
+  return 1;
 }
 
-boolean NanodeUNIO::start_write(const byte *buffer,word address,word length) {
-  byte cmd[4];
-  if (((address&0x0f)+length)>16) return false; // would cross page boundary
-  cmd[0]=addr;
+uint8_t unio_start_write(const uint8_t *buffer, uint16_t address, uint16_t length) {
+  uint8_t cmd[4];
+  if (((address&0x0f)+length)>16) return 0; // would cross page boundary
+  cmd[0]=unio_address;
   cmd[1]=UNIO_WRITE;
-  cmd[2]=(byte)(address>>8);
-  cmd[3]=(byte)(address&0xff);
+  cmd[2]=(uint8_t)(address>>8);
+  cmd[3]=(uint8_t)(address&0xff);
   unio_standby_pulse();
   cli();
   unio_start_header();
-  if (!unio_send(cmd,4,false)) fail();
-  if (!unio_send(buffer,length,true)) fail();
+  if (!send_data(cmd, 4, 0)) fail();
+  if (!send_data(buffer, length, 1)) fail();
   sei();
-  return true;
+  return 1;
 }
 
-boolean NanodeUNIO::enable_write(void) {
-  byte cmd[2];
-  cmd[0]=addr;
+uint8_t unio_enable_write(void) {
+  uint8_t cmd[2];
+  cmd[0]=unio_address;
   cmd[1]=UNIO_WREN;
   unio_standby_pulse();
   cli();
   unio_start_header();
-  if (!unio_send(cmd,2,true)) fail();
+  if (!send_data(cmd, 2, 1)) fail();
   sei();
-  return true;
+  return 1;
 }
 
-boolean NanodeUNIO::disable_write(void) {
-  byte cmd[2];
-  cmd[0]=addr;
+uint8_t unio_disable_write(void) {
+  uint8_t cmd[2];
+  cmd[0]=unio_address;
   cmd[1]=UNIO_WRDI;
   unio_standby_pulse();
   cli();
   unio_start_header();
-  if (!unio_send(cmd,2,true)) fail();
+  if (!send_data(cmd, 2, 1)) fail();
   sei();
-  return true;
+  return 1;
 }
 
-boolean NanodeUNIO::read_status(byte *status) {
-  byte cmd[2];
-  cmd[0]=addr;
+uint8_t unio_read_status(uint8_t *status) {
+  uint8_t cmd[2];
+  cmd[0]=unio_address;
   cmd[1]=UNIO_RDSR;
   unio_standby_pulse();
   cli();
   unio_start_header();
-  if (!unio_send(cmd,2,false)) fail();
-  if (!unio_read(status,1)) fail();
+  if (!send_data(cmd, 2, 0)) fail();
+  if (!read_data(status, 1)) fail();
   sei();
-  return true;
+  return 1;
 }
 
-boolean NanodeUNIO::write_status(byte status) {
-  byte cmd[3];
-  cmd[0]=addr;
+uint8_t unio_write_status(uint8_t status) {
+  uint8_t cmd[3];
+  cmd[0]=unio_address;
   cmd[1]=UNIO_WRSR;
   cmd[2]=status;
   unio_standby_pulse();
   cli();
   unio_start_header();
-  if (!unio_send(cmd,3,true)) fail();
+  if (!send_data(cmd, 3, 1)) fail();
   sei();
-  return true;
+  return 1;
 }
 
-boolean NanodeUNIO::await_write_complete(void) {
-  byte cmd[2];
-  byte status;
-  cmd[0]=addr;
+uint8_t unio_await_write_complete(void) {
+  uint8_t cmd[2];
+  uint8_t status;
+  cmd[0]=unio_address;
   cmd[1]=UNIO_RDSR;
   unio_standby_pulse();
   /* Here we issue RDSR commands back-to-back until the WIP bit in the
      status register is cleared.  Note that this isn't absolutely the
      most efficient way to monitor this bit; after sending the command
      we could read as many bytes as we like as long as we send MAK
-     after each byte.  The unio_read() function isn't set up to do
+     after each uint8_t.  The read_data() function isn't set up to do
      this, though, and it's not really performance-critical compared
      to the eeprom write time! We re-enable interrupts briefly between
      each command so that any background tasks like updating millis()
@@ -259,15 +272,15 @@ boolean NanodeUNIO::await_write_complete(void) {
     unio_inter_command_gap();
     cli();
     unio_start_header();
-    if (!unio_send(cmd,2,false)) fail();
-    if (!unio_read(&status,1)) fail();
+    if (!send_data(cmd, 2, 0)) fail();
+    if (!read_data(&status, 1)) fail();
     sei();
   } while (status&0x01);
-  return true;
+  return 1;
 }
 
-boolean NanodeUNIO::simple_write(const byte *buffer,word address,word length) {
-  word wlen;
+uint8_t unio_simple_write(const uint8_t *buffer, uint16_t address, uint16_t length) {
+  uint16_t wlen;
   while (length>0) {
     wlen=length;
     if (((address&0x0f)+wlen)>16) {
@@ -275,12 +288,12 @@ boolean NanodeUNIO::simple_write(const byte *buffer,word address,word length) {
 	 page boundary. */
       wlen=16-(address&0x0f);
     }
-    if (!enable_write()) return false;
-    if (!start_write(buffer,address,wlen)) return false;
-    if (!await_write_complete()) return false;
+    if (!unio_enable_write()) return 0;
+    if (!unio_start_write(buffer, address, wlen)) return 0;
+    if (!unio_await_write_complete()) return 0;
     buffer+=wlen;
     address+=wlen;
     length-=wlen;
   }
-  return true;
+  return 1;
 }
