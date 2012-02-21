@@ -4,7 +4,8 @@ CONTIKI_TARGET_MAIN = ${CONTIKI_CORE}.o
 
 CONTIKI_TARGET_SOURCEFILES += \
   contiki-nanode-main.c \
-  unio.c
+  unio.c \
+  leds-arch.c
 
 CONTIKIAVR = $(CONTIKI)/cpu/avr
 CONTIKIBOARD = .
