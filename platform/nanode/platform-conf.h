@@ -47,6 +47,9 @@
  */
 #define PLATFORM PLATFORM_AVR
 
+#define HAVE_STDINT_H
+#include "avrdef.h"
+
 /*
  * MCU and clock rate.
  */
