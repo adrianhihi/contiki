@@ -23,7 +23,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <util/delay.h>
+#include <util/delay_basic.h>
 
 
 #define UNIO_STARTHEADER 0x55
@@ -48,6 +48,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
 // Add this to all the times defined above, to be on the safe side!
 #define UNIO_FUDGE_FACTOR 5
 
+#define UNIO_DELAY( us )   ( _delay_loop_2( ( F_CPU / 4000000UL ) * ( us ) ) )
+
 #define UNIO_OUTPUT() do { DDRD |= 0x80; } while (0)
 #define UNIO_INPUT() do { DDRD &= 0x7f; } while (0)
 
@@ -64,7 +66,7 @@ static uint8_t read_bus(void) {
    between the end of one command and the start of the next. */
 static void unio_inter_command_gap(void) {
   set_bus(1);
-  _delay_us(UNIO_TSS+UNIO_FUDGE_FACTOR);
+  UNIO_DELAY(UNIO_TSS+UNIO_FUDGE_FACTOR);
 }
 
 /* Send a standby pulse on the bus.  After power-on or brown-out
@@ -74,9 +76,9 @@ static void unio_inter_command_gap(void) {
 static void unio_standby_pulse(void) {
   set_bus(0);
   UNIO_OUTPUT();
-  _delay_us(UNIO_TSS+UNIO_FUDGE_FACTOR);
+  UNIO_DELAY(UNIO_TSS+UNIO_FUDGE_FACTOR);
   set_bus(1);
-  _delay_us(UNIO_TSTBY+UNIO_FUDGE_FACTOR);
+  UNIO_DELAY(UNIO_TSTBY+UNIO_FUDGE_FACTOR);
 }
 
 /* While bit-banging, all delays are expressed in terms of quarter
@@ -88,13 +90,13 @@ static void unio_standby_pulse(void) {
 static volatile uint8_t rwbit(uint8_t w) {
   uint8_t a, b;
   set_bus(!w);
-  _delay_us(UNIO_QUARTER_BIT);
+  UNIO_DELAY(UNIO_QUARTER_BIT);
   a=read_bus();
-  _delay_us(UNIO_QUARTER_BIT);
+  UNIO_DELAY(UNIO_QUARTER_BIT);
   set_bus(w);
-  _delay_us(UNIO_QUARTER_BIT);
+  UNIO_DELAY(UNIO_QUARTER_BIT);
   b=read_bus();
-  _delay_us(UNIO_QUARTER_BIT);
+  UNIO_DELAY(UNIO_QUARTER_BIT);
   return b&&!a;
 }
 
@@ -157,7 +159,7 @@ static uint8_t read_data(uint8_t *data, uint16_t length)  {
    connected then that could cause bus contention. */
 static void unio_start_header(void) {
   set_bus(0);
-  _delay_us(UNIO_THDR+UNIO_FUDGE_FACTOR);
+  UNIO_DELAY(UNIO_THDR+UNIO_FUDGE_FACTOR);
   send_byte(UNIO_STARTHEADER, 1);
 }
 
